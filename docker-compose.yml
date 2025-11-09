@@ -1,58 +1,157 @@
 version: "3.8"
 
 services:
+  # 1. MySQL
   mysql:
     image: mysql:8.0
     container_name: mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_ROOT_PASSWORD:
     ports:
       - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
     networks:
       - backend
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-  user-service:
-    build: ./user
-    container_name: user-service
+  # 2. Config Server (NATIVE PROFILE)
+  config-server:
+    build: ./configserver
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    environment:
+      - SPRING_PROFILES_ACTIVE=native
+    volumes:
+      - ./config-repo:/config  # Mount config-repo vào /config
+    command: >
+      sh -c "
+      cp -r /config/* /app/config/ &&
+      java -jar /app.jar
+      "
+    networks:
+      - backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # 3. Eureka Server
+  eureka-server:
+    build: ./eureka
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+    networks:
+      - backend
+    depends_on:
+      - config-server
+
+  # 4. Auth Service
+  auth-service:
+    build: ./auth
+    container_name: auth-service
     ports:
       - "8081:8081"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/user_db?useSSL=false&serverTimezone=UTC
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=
+      - SPRING_APPLICATION_NAME=auth-service
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
     depends_on:
       - mysql
+      - config-server
+      - eureka-server
     networks:
       - backend
 
+  # 5. Product Service
   product-service:
     build: ./product
     container_name: product-service
     ports:
       - "8082:8082"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/product_db?useSSL=false&serverTimezone=UTC
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=
+      - SPRING_APPLICATION_NAME=product-service
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
     depends_on:
       - mysql
+      - config-server
+      - eureka-server
     networks:
       - backend
 
+  # 6. Cart Service
+  cart-service:
+    build: ./cart
+    container_name: cart-service
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_APPLICATION_NAME=cart-service
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+    depends_on:
+      - mysql
+      - config-server
+      - eureka-server
+    networks:
+      - backend
+
+  # 7. Order Service
   order-service:
     build: ./order
     container_name: order-service
     ports:
-      - "8083:8083"
+      - "8084:8084"
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/order_db?useSSL=false&serverTimezone=UTC
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=
+      - SPRING_APPLICATION_NAME=order-service
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
     depends_on:
       - mysql
+      - config-server
+      - eureka-server
+    networks:
+      - backend
+
+  # 8. Payment Service
+  payment-service:
+    build: ./payment
+    container_name: payment-service
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_APPLICATION_NAME=payment-service
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+    depends_on:
+      - mysql
+      - config-server
+      - eureka-server
+    networks:
+      - backend
+
+  # 9. Gateway
+  gateway:
+    build: ./gateway
+    container_name: gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_APPLICATION_NAME=gateway-service
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+    depends_on:
+      - config-server
+      - eureka-server
     networks:
       - backend
 
@@ -61,3 +160,4 @@ volumes:
 
 networks:
   backend:
+    driver: bridge

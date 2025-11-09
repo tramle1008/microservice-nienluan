@@ -15,5 +15,6 @@ public class ProductResponse {
     private  Integer pageSize;
     private Long totalElements;
     private Integer totalPages;
-    private  boolean lastPage;
+    private boolean lastPage;
+
 }

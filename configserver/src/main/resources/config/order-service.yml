@@ -14,7 +14,7 @@ spring:
         dialect: org.hibernate.dialect.MySQL8Dialect
 
 server:
-  port: 8083
+  port: 8084
 
 frontend:
   urls: http://localhost:3000,http://127.0.0.1:3000

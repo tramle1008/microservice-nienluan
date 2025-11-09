@@ -1,119 +1,163 @@
 package com.ecommerce.product.controller;
 
-
-import com.ecommerce.product.config.AppConstants;
-import com.ecommerce.product.dto.ProductDTO;
-import com.ecommerce.product.dto.ProductResponse;
+import com.ecommerce.product.dto.*;
+import com.ecommerce.product.models.Product;
+import com.ecommerce.product.repository.ProductRepository;
+import com.ecommerce.product.service.CategoryService;
 import com.ecommerce.product.service.ProductService;
-import jakarta.validation.Valid;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/products")
 public class ProductController {
+
     @Autowired
     private ProductService productService;
+    @Autowired
+    private CategoryService categoryService;
+    @Autowired
+    private ProductRepository productRepository;
 
-//    @PostMapping("/admin/categories/{categoryId}/product")
+//  ==============NHÓM QUẢN LÝ ==============
+    // 1. Tạo sản phẩm + variant + ảnh
     @PostMapping(
-        value = "/admin/categories/{categoryId}/product",
-        consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+            value = "/auth/with-variants",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
-    public ResponseEntity<ProductDTO> addProduct(
-            @PathVariable Long categoryId,
-            @RequestPart("product") ProductDTO productDTO,
-            @RequestPart(value = "image", required = false) MultipartFile image
+    public ResponseEntity<ProductDTO> addProductWithVariants(
+            @RequestParam Long categoryId,
+            @RequestPart("createDTO") String createDTOJson,  // ← String JSON
+            @RequestPart MultipartFile mainImage,
+            @RequestPart(name = "variantImages", required = false) List<MultipartFile> variantImages
     ) throws IOException {
-        ProductDTO addProduct = productService.addProduct(categoryId, productDTO, image);
-        return  new ResponseEntity<>(addProduct, HttpStatus.CREATED);
+
+        ObjectMapper mapper = new ObjectMapper();
+        ProductCreateDTO createDTO = mapper.readValue(createDTOJson, ProductCreateDTO.class);
+
+        ProductDTO product = productService.addProductWithVariants(categoryId, createDTO, mainImage, variantImages);
+        return ResponseEntity.ok(product);
     }
 
+    // 6. Cập nhật toàn bộ sản phẩm
+    @PutMapping("/auth/{productId}")
+    public ResponseEntity<ProductDTO> updateProduct(
+            @PathVariable Long productId,
+            @RequestBody ProductUpdateDTO updateDTO
+    ) {
+        ProductDTO updated = productService.updateProduct(productId, updateDTO);
+        return ResponseEntity.ok(updated);
+    }
 
-//thu lan 2
-    @PostMapping("/admin/categories/{categoryId}/productImage")
-    public ResponseEntity<ProductDTO> addProduct_Image(
-            @PathVariable Long categoryId,
-            @RequestPart("product") ProductDTO productDTO,
-            @RequestPart(value = "imageFile", required = false) MultipartFile imageFile
+    // 7. Xóa sản phẩm
+    @DeleteMapping("/auth/{productId}")
+    public ResponseEntity<Void> deleteProduct(@PathVariable Long productId) {
+        productService.deleteProduct(productId);
+        return ResponseEntity.noContent().build();
+    }
+    // 8. Cập nhật ảnh chính
+    @PatchMapping(value = "/auth/{productId}/main-image", consumes = {"multipart/form-data"})
+    public ResponseEntity<ProductDTO> updateProductImage(
+            @PathVariable Long productId,
+            @RequestPart MultipartFile image
     ) throws IOException {
-        ProductDTO createdProduct = productService.addProduct_Image(categoryId, productDTO, imageFile);
-        return ResponseEntity.ok(createdProduct);
+        ProductDTO updated = productService.updateProductImage(productId, image);
+        return ResponseEntity.ok(updated);
     }
+    // 9. Cập nhật ảnh variant
+    @PatchMapping(value = "/auth/variants/{variantId}/image", consumes = {"multipart/form-data"})
+    public ResponseEntity<ProductVariantDTO> updateVariantImage(
+            @PathVariable Long variantId,
+            @RequestPart MultipartFile image
+    ) throws IOException {
+        ProductVariantDTO updated = productService.updateVariantImage(variantId, image);
+        return ResponseEntity.ok(updated);
+    }
+    // 10. Giảm tồn kho (gọi từ Order Service)
+    @PatchMapping("/auth/variants/{variantId}/reduce-stock")
+    public ResponseEntity<ProductVariantDTO> reduceVariantStock(
+            @PathVariable Long variantId,
+            @RequestParam int quantity
+    ) {
+        ProductVariantDTO variant = productService.reduceVariantStock(variantId, quantity);
+        return ResponseEntity.ok(variant);
+    }
+//=============NHÓM PUBLIC =======
 
-    @PostMapping("/admin/categories/{categoryId}/product/default")
-    public ResponseEntity<ProductDTO> addProductDefault(
+    // 2. Lấy danh sách phân trang + tìm kiếm + lọc
+    @GetMapping("/public")
+    public ResponseEntity<ProductResponse> getAllProducts(
+            @RequestParam(defaultValue = "0") int pageNumber,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortOrder,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long categoryId
+    ) {
+        ProductResponse response = productService.getAllProducts(pageNumber, pageSize, sortBy, sortOrder, keyword, categoryId);
+        return ResponseEntity.ok(response);
+    }
+    // 3. Lấy sản phẩm theo ID
+    @GetMapping("/public/{productId}")
+    public ResponseEntity<ProductDTO> getProductById(@PathVariable Long productId) {
+        ProductDTO product = productService.getProductById(productId);
+        return ResponseEntity.ok(product);
+    }
+    // 4. Lấy theo category
+    @GetMapping("/public/category/{categoryId}")
+    public ResponseEntity<ProductResponse> getProductsByCategory(
             @PathVariable Long categoryId,
-           @Valid @RequestBody ProductDTO productDTO
-    )  {
-        ProductDTO addProduct = productService.addProductDefault(categoryId, productDTO);
-        return  new ResponseEntity<>(addProduct, HttpStatus.CREATED);
+            @RequestParam(defaultValue = "0") int pageNumber,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(defaultValue = "productId") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortOrder
+    ) {
+        ProductResponse response = productService.getProductsByCategory(categoryId, pageNumber, pageSize, sortBy, sortOrder);
+        return ResponseEntity.ok(response);
+    }
+    // 5. Tìm kiếm theo từ khóa
+    @GetMapping("/public/search")
+    public ResponseEntity<ProductResponse> searchProducts(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "0") int pageNumber,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(defaultValue = "productId") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortOrder
+    ) {
+        ProductResponse response = productService.getProductsByKeyword(keyword, pageNumber, pageSize, sortBy, sortOrder);
+        return ResponseEntity.ok(response);
     }
 
-
-    @GetMapping("/public/products")
-    public ResponseEntity<ProductResponse> getAllProduct(
-            @RequestParam(name =  "pageNumber", defaultValue = AppConstants.PAGE_NUMBER, required = false) Integer pageNumber,
-            @RequestParam(name =  "pageSize", defaultValue = AppConstants.PAGE_SIZE_PRODUCT, required = false ) Integer pageSize,
-            @RequestParam(name =  "sortBy", defaultValue = AppConstants.SORT_BY_PRODUCTS, required = false ) String sortBy ,
-            @RequestParam(name =  "sortOrder" , defaultValue = AppConstants.SORT_ORDER_TANG, required = false ) String sortOrder,
-            @RequestParam(name = "key", required = false) String key,
-            @RequestParam(name = "categoryId", required = false) Integer categoryId){
-        return new ResponseEntity<>(productService.getAllProduct(pageNumber, pageSize,sortBy,sortOrder ,key, categoryId ),HttpStatus.OK);
+    @GetMapping("/public/discounted")
+    public ResponseEntity<List<ProductDTO>> getDiscountedProducts() {
+        List<ProductDTO> products = productService.getDiscountedProducts();
+        return ResponseEntity.ok(products);
     }
 
-    @GetMapping("/products/{productId}")
-    public ResponseEntity<ProductDTO> getProductById(@PathVariable Long productId){
-        return new ResponseEntity<>(productService.getProductById(productId), HttpStatus.OK);
+    @GetMapping("/public/tree/{rootId}")
+    public ResponseEntity<Page<ProductDTO>> getRandom(
+            @PathVariable Long rootId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<ProductDTO> result = productService.getRandomProductsInTree(rootId, pageable);
+        return ResponseEntity.ok(result);
     }
 
-    @GetMapping("/public/categories/{categoryId}/products")
-    public ResponseEntity<ProductResponse> getProductByCategory(
-            @PathVariable Long categoryId,
-            @RequestParam(name =  "pageNumber", defaultValue = AppConstants.PAGE_NUMBER, required = false) Integer pageNumber,
-            @RequestParam(name =  "pageSize", defaultValue = AppConstants.PAGE_SIZE_PRODUCT, required = false ) Integer pageSize,
-            @RequestParam(name =  "sortBy", defaultValue = AppConstants.SORT_BY_PRODUCTS, required = false ) String sortBy ,
-            @RequestParam(name =  "sortOrder" , defaultValue = AppConstants.SORT_ORDER_TANG, required = false ) String sortOrder
-
-    ){
-        return new ResponseEntity<>(productService.getProductByCategory(categoryId, pageNumber, pageSize,sortBy,sortOrder), HttpStatus.OK);
+    @GetMapping("/variants/public/{id}")
+    public ResponseEntity<ProductVariantDTO> getVariant(@PathVariable Long id) {
+        ProductVariantDTO variant = productService.getVariantById(id);
+        return ResponseEntity.ok(variant);
     }
-
-    @GetMapping("/public/categories/products")
-    public ResponseEntity<ProductResponse> getProductByKey(
-       @RequestParam(name = "key", defaultValue = "all") String key,
-       @RequestParam(name =  "pageNumber", defaultValue = AppConstants.PAGE_NUMBER, required = false) Integer pageNumber,
-                                                           @RequestParam(name =  "pageSize", defaultValue = AppConstants.PAGE_SIZE_PRODUCT, required = false ) Integer pageSize,
-                                                           @RequestParam(name =  "sortBy", defaultValue = AppConstants.SORT_BY_PRODUCTS, required = false ) String sortBy ,
-                                                           @RequestParam(name =  "sortOrder" , defaultValue = AppConstants.SORT_ORDER_TANG, required = false ) String sortOrder){
-        return new ResponseEntity<>(productService.getProductByKey(key, pageNumber, pageSize,sortBy,sortOrder), HttpStatus.OK);
-    }
-
-
-    @PutMapping("/admin/products/{productId}")
-    public ResponseEntity<ProductDTO> updateProduct(@RequestBody ProductDTO product,@PathVariable Long productId){
-       ProductDTO productDTO =  productService.updateProduct(product, productId);
-        return  new ResponseEntity<>(productDTO, HttpStatus.OK);
-    }
-
-
-    @DeleteMapping("/admin/products/{productId}")
-    public ResponseEntity<ProductDTO> deleteProduct(@PathVariable Long productId) {
-        ProductDTO flag = productService.deleteProduct(productId);
-        return  new ResponseEntity<>(flag, HttpStatus.OK);
-    }
-
-    @PutMapping("/products/{productId}/image")
-    public ResponseEntity<ProductDTO> updateProductImage(@PathVariable Long productId,
-                                                         @RequestParam("image")MultipartFile image)  throws IOException {
-        ProductDTO updateproductDTO = productService.updateProductImage(productId, image);
-        return new ResponseEntity<>(updateproductDTO, HttpStatus.OK);
-    }
-
 }
