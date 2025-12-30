@@ -4,66 +4,127 @@ server:
 spring:
   cloud:
     gateway:
-      discovery:
-        locator:
-          enabled: true
       routes:
-        # PUBLIC API - PRODUCT
-        - id: product-public
+        # ======================================
+        #                PRODUCT SERVICE
+        # ======================================
+
+        # 1. PRODUCT
+        - id: product
           uri: lb://PRODUCT-SERVICE
           predicates:
-            - Path=/api/products/public/**,/api/categories/public/**,/api/discounts/public/**
+            - Path=/api/products/**
           filters:
-            - StripPrefix=1
+            - StripPrefix=0
 
-        # AUTH API - PRODUCT
-        - id: product-auth
+        # 2. CATEGORY
+        - id: category
           uri: lb://PRODUCT-SERVICE
           predicates:
-            - Path=/api/products/auth/**,/api/categories/auth/**,/api/discounts/auth/**
+            - Path=/api/categories/**
           filters:
-            - StripPrefix=1
+            - StripPrefix=0
 
-        # AUTH SERVICE
-        - id: auth-service
+        # 3. DISCOUNT
+        - id: discount
+          uri: lb://PRODUCT-SERVICE
+          predicates:
+            - Path=/api/discounts/**
+          filters:
+            - StripPrefix=0
+        # 4. variants
+        - id: product-variant
+          uri: lb://PRODUCT-SERVICE
+          predicates:
+            - Path=/api/variants/**
+          filters:
+            - StripPrefix=0
+        # ======================================
+        #                AUTH SERVICE
+        # ======================================
+
+        # PUBLIC ENDPOINTS: login, signup, validate, etc.
+        - id: auth-public
           uri: lb://AUTH-SERVICE
           predicates:
-            - Path=/api/addresses/**,/api/user/**,/api/auth/**
+            - Path=/api/auth/**
           filters:
-            - StripPrefix=1
+            - StripPrefix=0
 
-        # CART SERVICE
+        # USER ENDPOINTS: profile, update, get info
+        - id: auth-user
+          uri: lb://AUTH-SERVICE
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - StripPrefix=0
+
+        - id: auth-user
+          uri: lb://AUTH-SERVICE
+          predicates:
+            - Path=/api/admin/**
+          filters:
+            - StripPrefix=0
+
+        # ADDRESS ENDPOINTS: CRUD address
+        - id: auth-address
+          uri: lb://AUTH-SERVICE
+          predicates:
+            - Path=/api/address/**
+          filters:
+            - StripPrefix=0
+
+        # ADDRESS ENDPOINTS: CRUD address
+        - id: auth-address-shipping
+          uri: lb://AUTH-SERVICE
+          predicates:
+            - Path=/api/shipping/**
+          filters:
+            - StripPrefix=0
+
+        # ======================================
+        #                Cart SERVICE
+        # ======================================
+
+        # 5. CART SERVICE
         - id: cart-service
           uri: lb://CART-SERVICE
           predicates:
-            - Path=/api/cart/**
+            - Path=/api/carts/**
           filters:
-            - StripPrefix=1
+            - StripPrefix=0
 
+        # ======================================
+        #                Order SERVICE
+        # ======================================
         # ORDER SERVICE
         - id: order-service
           uri: lb://ORDER-SERVICE
           predicates:
             - Path=/api/orders/**
-          filters:
-            - StripPrefix=1
 
+        # ======================================
+        #                Payment SERVICE
+        # ======================================
         # PAYMENT SERVICE
         - id: payment-service
-          uri: lb://PAYMENT-SERVICE
+          uri: lb://PAYMENT
           predicates:
             - Path=/api/payments/**
-          filters:
-            - StripPrefix=1
+
+        # ======================================
+        #                IMAGE SEARCH SERVICE
+        # ======================================
 
         # IMAGE SEARCH (Python service)
         - id: image-search-service
-          uri: http://localhost:8081
+          uri: http://localhost:8086
           predicates:
-            - Path=/api/image-search/**
-          filters:
-            - StripPrefix=1
+            - Path=/api/image/**
 
+        # ======================================
+        #                EUREKA
+        # ======================================
         # EUREKA UI
         - id: eureka-ui
           uri: http://localhost:8761

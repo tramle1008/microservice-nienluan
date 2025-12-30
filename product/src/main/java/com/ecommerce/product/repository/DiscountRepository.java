@@ -30,4 +30,11 @@ public interface DiscountRepository extends JpaRepository<Discount, Long> {
 
     List<Discount> findByActiveTrueAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
             java.time.LocalDateTime now1, java.time.LocalDateTime now2);
+
+
+    // Tìm theo tên chứa từ khóa (không phân biệt hoa thường)
+    Page<Discount> findByNameContainingIgnoreCase(String keyword, Pageable pageable);
+
+    // Lọc theo active = true hoặc false
+    Page<Discount> findByActive(boolean active, Pageable pageable);
 }

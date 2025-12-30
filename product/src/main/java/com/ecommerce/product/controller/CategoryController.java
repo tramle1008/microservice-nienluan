@@ -2,6 +2,7 @@ package com.ecommerce.product.controller;
 
 import com.ecommerce.product.config.AppConstants;
 import com.ecommerce.product.dto.*;
+import com.ecommerce.product.repository.CategoryRepository;
 import com.ecommerce.product.service.CategoryService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +19,19 @@ public class CategoryController {
     @Autowired
     private CategoryService categoryService;
 
-    // 1. Lấy cây danh mục
+    private final CategoryRepository categoryRepository;
+
+    public CategoryController(CategoryRepository categoryRepository) {
+        this.categoryRepository = categoryRepository;
+    }
+
+    @GetMapping("/admin/count")
+    public Long countCategories() {
+        return categoryRepository.count();
+    }
+
+//##### PUBLIC ################################3
+// 1. Lấy cây danh mục
     @GetMapping("/public/tree")
     public ResponseEntity<List<CategoryTreeDTO>> getCategoryTree() {
         List<CategoryTreeDTO> tree = categoryService.getCategoryTree();
@@ -32,6 +45,19 @@ public class CategoryController {
         return ResponseEntity.ok(products);
     }
 
+    //2.1 api cũ để test nếu cần
+    @GetMapping("/public")
+    public ResponseEntity<CategoryResponse> getCategoryList(
+            @RequestParam(defaultValue = AppConstants.PAGE_NUMBER) Integer pageNumber,
+            @RequestParam(defaultValue = AppConstants.PAGE_SIZE_ALL) Integer pageSize,
+            @RequestParam(defaultValue = AppConstants.SORT_BY_CATEGORYID) String sortBy,
+            @RequestParam(defaultValue = AppConstants.SORT_ORDER_TANG) String sortOrder
+    ) {
+        CategoryResponse response = categoryService.getAllCategories(pageNumber, pageSize, sortBy, sortOrder);
+        return ResponseEntity.ok(response);
+    }
+
+// ###### AUTH ADMIN####################
     // 3. Tạo root category
     @PostMapping("/auth/create-root")
     public ResponseEntity<CategoryDTO> createRootCategory(@Valid @RequestBody CategoryCreateDTO dto) {
@@ -64,22 +90,9 @@ public class CategoryController {
     }
 
     // 7. Xóa root bằng tên
-    @DeleteMapping("/auht/delete/rootName")
+    @DeleteMapping("/auth/delete/rootName")
     public ResponseEntity<String> deleteRootByName(@RequestParam String rootName) {
         String result = categoryService.deleteRootByName(rootName);
         return ResponseEntity.ok(result);
     }
-
-    // === CÁC API CŨ ===
-    @GetMapping("/public")
-    public ResponseEntity<CategoryResponse> getCategoryList(
-            @RequestParam(defaultValue = AppConstants.PAGE_NUMBER) Integer pageNumber,
-            @RequestParam(defaultValue = AppConstants.PAGE_SIZE_ALL) Integer pageSize,
-            @RequestParam(defaultValue = AppConstants.SORT_BY_CATEGORYID) String sortBy,
-            @RequestParam(defaultValue = AppConstants.SORT_ORDER_TANG) String sortOrder
-    ) {
-        CategoryResponse response = categoryService.getAllCategories(pageNumber, pageSize, sortBy, sortOrder);
-        return ResponseEntity.ok(response);
-    }
-
 }

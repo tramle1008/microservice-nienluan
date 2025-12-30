@@ -17,12 +17,9 @@ public class ProductDTO {
     private String productName;
     private String shortDescription;
     private String longDescription; // HTML
-//    private String image;
-private String imageUrl;
+    private String imageUrl;
     private BigDecimal price;
     private BigDecimal finalPrice;
     private List<AppliedDiscountDTO> appliedDiscounts;
     private List<ProductVariantDTO> variants;
-//    private MultipartFile imageFile;
-
 }

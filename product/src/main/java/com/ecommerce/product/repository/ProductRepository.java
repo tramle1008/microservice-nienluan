@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 
 public interface ProductRepository extends JpaRepository<Product, Long> , JpaSpecificationExecutor<Product> {
@@ -63,5 +64,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> , JpaSpe
    @EntityGraph(attributePaths = {"variants"})
    Page<Product> findByCategory_CategoryIdIn(List<Long> categoryIds, Pageable pageable);
 
+  // ProductRepository.java
+  List<Product> findByImagePathContaining(String partialPath);
 
+  List<Product> findAllByProductIdIn(Set<Long> productIds);
 }

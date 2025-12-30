@@ -8,27 +8,50 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 public class ProductClient {
 
     private final RestTemplate restTemplate;
+    private static final String BASE_URL = "http://product-service";
 
-    @Bean
-    @LoadBalanced
-    public RestTemplate restTemplate() {
-        return new RestTemplate();
-    }
-
-    public ProductDTO getProduct(Long productId) {
-        return restTemplate.getForObject(
-                "http://product-service/api/products/public/{id}",
-                ProductDTO.class, productId);
-    }
-
+    // LẤY 1 VARIANT
     public ProductVariantDTO getVariant(Long variantId) {
         return restTemplate.getForObject(
-                "http://product-service/api/variants/public/{id}",
+                BASE_URL + "/api/variants/public/{id}",
                 ProductVariantDTO.class, variantId);
+    }
+
+    // MỚI: LẤY NHIỀU VARIANT TRONG 1 LẦN
+    public Map<Long, ProductVariantDTO> getVariantsBatch(List<Long> variantIds) {
+        if (variantIds == null || variantIds.isEmpty()) {
+            return Map.of();
+        }
+
+        String ids = variantIds.stream()
+                .map(String::valueOf)
+                .distinct()
+                .collect(Collectors.joining(","));
+
+        ProductVariantDTO[] array = restTemplate.getForObject(
+                BASE_URL + "/api/variants/public/batch?ids=" + ids,
+                ProductVariantDTO[].class);
+
+        if (array == null) {
+            return Map.of();
+        }
+
+        return Arrays.stream(array)
+                .collect(Collectors.toMap(
+                        ProductVariantDTO::getVariantId,
+                        Function.identity(),
+                        (existing, replacement) -> existing // tránh trùng
+                ));
     }
 }

@@ -14,9 +14,11 @@ public class CartItemDTO {
     private Long itemId;
     private Long productId;
     private Long variantId;
+    private String color;
     private String productName;
     private String imageUrl;
     private int quantity;
     private BigDecimal unitPrice;
     private BigDecimal subtotal;
+    private Long discountId;
 }

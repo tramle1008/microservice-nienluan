@@ -14,4 +14,7 @@ public interface CartService {
     CartDTO removeItem(Long userId, Long itemId);
 
     void clearCart(Long userId);
+
+    CartDTO incrementItem(Long userId, Long itemId);
+    CartDTO decrementItem(Long userId, Long itemId);
 }

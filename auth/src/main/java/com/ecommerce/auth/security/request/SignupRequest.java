@@ -12,19 +12,13 @@ import java.util.Set;
 @AllArgsConstructor
 @NoArgsConstructor
 public class SignupRequest {
-
     @NotBlank
     @Size(min = 3, max = 20)
     private String username;
-
     @NotBlank
     private String email;
-
-
     private Set<String> role;
-
     @NotBlank
     @Size(min = 8, max = 40, message = "Mật khẩu phải từ 8 đến 40 ký tự")
     private String password;
-
 }

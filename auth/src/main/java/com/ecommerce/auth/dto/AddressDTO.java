@@ -4,16 +4,15 @@ package com.ecommerce.auth.dto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+//dau ra
 @Data
-@AllArgsConstructor
 @NoArgsConstructor
+@AllArgsConstructor
 public class AddressDTO {
     private Long addressId;
-    private String province; //tỉnh thành phố
-    private String district; //quận huyện
-    private String ward; //phường , xã, thị trấn
+    private Long provinceId;
+    private String province;
+    private String ward;
     private String detail;
     private String phoneNumber;
-
 }

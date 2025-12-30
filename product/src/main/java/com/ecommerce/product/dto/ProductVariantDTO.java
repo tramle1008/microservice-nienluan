@@ -19,5 +19,6 @@ public class ProductVariantDTO {
     private String imageUrl;
     private BigDecimal priceOverride;
     private BigDecimal finalPrice;
+    private List<AppliedDiscountDTO> appliedProductDiscounts;
     private List<AppliedDiscountDTO> appliedDiscounts;
 }

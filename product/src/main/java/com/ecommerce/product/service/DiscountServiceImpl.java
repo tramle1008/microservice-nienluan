@@ -2,12 +2,17 @@ package com.ecommerce.product.service;
 
 import com.ecommerce.product.dto.DiscountCreateDTO;
 import com.ecommerce.product.dto.DiscountDTO;
+import com.ecommerce.product.dto.DiscountResponse;
 import com.ecommerce.product.dto.DiscountUpdateDTO;
 import com.ecommerce.product.exceptions.ResourceNotFoundException;
 import com.ecommerce.product.exceptions.BadRequestException;
 import com.ecommerce.product.models.*;
 import com.ecommerce.product.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,8 +75,8 @@ public class DiscountServiceImpl implements DiscountService {
         discount = discountRepository.save(discount);
         return mapToDTO(discount);
     }
-
-    private DiscountDTO mapToDTO(Discount d) {
+    @Override
+    public DiscountDTO mapToDTO(Discount d) {
         return new DiscountDTO(
                 d.getDiscountId(),
                 d.getName(),
@@ -82,6 +87,59 @@ public class DiscountServiceImpl implements DiscountService {
                 d.isActive(),
                 d.getTarget().name(),
                 d.getType().name()
+        );
+    }
+
+    @Override
+    public void deleteDiscount(Long id) {
+        Discount discount = discountRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy khuyến mãi với ID: " + id));
+
+        discountRepository.delete(discount);
+
+    }
+
+    // DiscountServiceImpl.java
+    @Override
+    public DiscountResponse getAllDiscounts(int pageNumber, int pageSize,
+                                            String sortBy, String sortOrder,
+                                            String keyword, Boolean active) {
+
+        // Xử lý sort
+        Sort sort = sortOrder.equalsIgnoreCase("desc")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
+
+        Page<Discount> discountPage;
+
+        // Tìm theo keyword
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            // Tìm theo name chứa keyword
+            discountPage = discountRepository.findByNameContainingIgnoreCase(keyword, pageable);
+        }
+        // Lọc theo active (true/false) hoặc lấy tất cả
+        else if (active != null) {
+            discountPage = discountRepository.findByActive(active, pageable);
+        }
+        // Lấy tất cả
+        else {
+            discountPage = discountRepository.findAll(pageable);
+        }
+
+        List<DiscountDTO> dtos = discountPage.getContent()
+                .stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+
+        return new DiscountResponse(
+                dtos,
+                discountPage.getNumber(),
+                discountPage.getSize(),
+                discountPage.getTotalElements(),
+                discountPage.getTotalPages(),
+                discountPage.isLast()
         );
     }
 
@@ -186,4 +244,5 @@ public class DiscountServiceImpl implements DiscountService {
         product.setFinalPrice(finalPrice);
         productRepository.save(product);
     }
+
 }

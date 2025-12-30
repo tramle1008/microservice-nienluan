@@ -2,6 +2,7 @@ package com.ecommerce.auth.controller;
 
 
 import com.ecommerce.auth.dto.UserInfo;
+import com.ecommerce.auth.dto.UserProfileDTO;
 import com.ecommerce.auth.models.AppRole;
 import com.ecommerce.auth.models.Role;
 import com.ecommerce.auth.models.User;
@@ -49,6 +50,8 @@ public class AuthController {
 
     @Autowired
     UserService userService;
+
+//    Public
     @PostMapping("/signin")
     public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
         Authentication authentication;
@@ -165,6 +168,7 @@ public class AuthController {
         }
     }
 
+//    phải xác thực - auth
     @GetMapping("/username")
     public String currentUser(Authentication authentication){
         if(authentication != null) {
@@ -173,30 +177,11 @@ public class AuthController {
             return "null";
     }
 
-    @GetMapping("/user")
-    public ResponseEntity<?> getUserDetail(Authentication authentication, HttpServletRequest request){
-        if (authentication == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Bạn chưa đăng ký");
-        }
-        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-
-        List<String> roles = userDetails.getAuthorities().stream()
-                .map(item -> item.getAuthority())
-                .collect(Collectors.toList());
-        String jwtToken = jwtUtils.getJWTFromHeader(request);
-
-        UserInfoResponse response = new UserInfoResponse(
-                userDetails.getId(),
-                userDetails.getUsername(),
-                userDetails.getEmail(),
-                roles,
-                jwtToken
-        );
-        return  ResponseEntity.ok().body(response);
+    @GetMapping("/user/{userId}/profile")
+    public ResponseEntity<UserProfileDTO> getUserProfile(@PathVariable Long userId) {
+        UserProfileDTO profile = userService.getUserProfile(userId);
+        return ResponseEntity.ok(profile);
     }
-
-
-
 
 
 }

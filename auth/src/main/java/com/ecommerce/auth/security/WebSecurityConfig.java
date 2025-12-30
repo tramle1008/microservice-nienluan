@@ -78,8 +78,11 @@ Ai điều phối tất cả?”
                                 "/api/products/**",
                                 "/error",
                                 "/images/**",
+                                "/api/address/provinces",
+                                "/api/address/wards",
                                 "/api/payments/sepapy-callback",
                                 "/api/orders/status/**",
+                                "/api/shipping/fee/province/**",
                                 "/calljson"
                         ).permitAll()
                         .requestMatchers("/api/payments/qr").authenticated()
@@ -92,7 +95,5 @@ Ai điều phối tất cả?”
                 .headers(headers -> headers.frameOptions(f -> f.sameOrigin()));
         return http.build();
     }
-
-
 
 }

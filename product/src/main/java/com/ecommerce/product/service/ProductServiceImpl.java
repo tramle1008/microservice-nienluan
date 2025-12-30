@@ -1,5 +1,6 @@
 package com.ecommerce.product.service;
 
+import com.ecommerce.product.client.ImageSearchClient;
 import com.ecommerce.product.dto.*;
 import com.ecommerce.product.exceptions.ResourceNotFoundException;
 import com.ecommerce.product.models.*;
@@ -14,8 +15,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,39 +31,13 @@ public class ProductServiceImpl implements ProductService {
     @Autowired private DiscountRepository discountRepository;
     @Autowired private ProductDiscountRepository productDiscountRepository; // PRODUCT
     @Autowired private VariantDiscountRepository variantDiscountRepository; // VARIANT
+    @Autowired
+    private ImageSearchClient imageSearchClient;
+
 
     @Autowired private FileService fileService;
     @Value("${file.upload-dir:/uploads}")
     private String uploadDir;
-    @Override
-    public List<ProductDTO> getDiscountedProducts() {
-        // Lấy tất cả sản phẩm
-        List<Product> allProducts = productRepository.findAll();
-
-        // Lọc sản phẩm có ít nhất 1 discount active
-        List<Product> discountedProducts = allProducts.stream()
-                .filter(p -> !productDiscountRepository.findByProduct_ProductId(p.getProductId()).isEmpty())
-                .toList();
-
-        // Map sang DTO
-        return discountedProducts.stream()
-                .map(this::mapToDTO)
-                .toList();
-    }
-    @Override
-    public Page<ProductDTO> getRandomProductsInTree(Long rootId, Pageable pageable) {
-        List<Long> categoryIds = categoryService.getAllChildIds(rootId); // ← bạn đã có
-        Page<Product> page = productRepository.findRandomInCategoryIds(categoryIds, pageable);
-        return page.map(this::mapToDTO);
-    }
-
-    @Override
-    public ProductVariantDTO getVariantById(Long id) {
-        ProductVariant variant = variantRepository.findByIdWithProduct(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Variant not found with id: " + id));
-        return mapToVariantDTO(variant);
-    }
-
     @Override
     public ProductDTO addProductWithVariants(Long categoryId, ProductCreateDTO createDTO,
                                              MultipartFile mainImage, List<MultipartFile> variantImages) throws IOException {
@@ -68,7 +45,7 @@ public class ProductServiceImpl implements ProductService {
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy danh mục"));
 
-        String mainImageUrl = fileService.uploadImage("products", mainImage);
+
         // BƯỚC 1: Tạo và lưu Product trước
         Product product = new Product();
         product.setProductName(createDTO.getProductName());
@@ -100,11 +77,138 @@ public class ProductServiceImpl implements ProductService {
         }
         // BƯỚC 5: Lưu variants
         variantRepository.saveAll(variants);
+
         // BƯỚC 6: Cập nhật finalPrice
-        savedProduct.setFinalPrice(calculateFinalPrice(savedProduct, null));
-        productRepository.save(savedProduct);
+// XÓA 2 DÒNG SAU:
+//        savedProduct.setFinalPrice(calculateFinalPrice(savedProduct, null));
+//        productRepository.save(savedProduct);
         return mapToDTO(savedProduct);
     }
+
+    @Override
+    public List<ProductDTO> searchProductsBySimilarImage(MultipartFile image) throws IOException {
+
+        // 1. Gọi Python service
+        ImageSearchResponse response = imageSearchClient.searchSimilarImages(image);
+
+        // 2. Lấy danh sách filename từ kết quả
+        List<String> similarImageNames = response.similarImages().stream()
+                .map(ImageSearchResponse.SimilarImage::filename)
+                .toList();
+
+        // 3. Tìm product theo tên ảnh
+        Set<Long> productIds = new HashSet<>();
+
+        for (String imageName : similarImageNames) {
+            // Loại bỏ phần đuôi nếu cần (ví dụ: có query param ?size=large)
+            String cleanName = imageName.split("\\?")[0];
+
+            // Tìm ở ảnh chính
+            productRepository.findByImagePathContaining(cleanName)
+                    .forEach(p -> productIds.add(p.getProductId()));
+
+            // Tìm ở variant
+            variantRepository.findByImagePathContaining(cleanName)
+                    .forEach(v -> productIds.add(v.getProduct().getProductId()));
+        }
+
+        // 4. Trả về danh sách sản phẩm (có thể sort theo similarity nếu muốn)
+        return productRepository.findAllById(productIds)
+                .stream()
+                .map(this::mapToDTO)
+                .toList();
+    }
+
+    @Override
+    public Page<ProductDTO> getProductsInTree(Long rootId, Pageable pageable) {
+
+        List<Long> categoryIds = categoryService.getAllChildIds(rootId);
+        categoryIds.add(rootId); // ← ĐỪNG QUÊN ROOT
+
+        Page<Product> page =
+                productRepository.findByCategory_CategoryIdIn(categoryIds, pageable);
+
+        return page.map(this::mapToDTO);
+    }
+
+
+    @Override
+    public List<ProductDTO> getDiscountedProducts() {
+        LocalDateTime now = LocalDateTime.now();
+
+        // Bước 1: Lấy tất cả discount đang active + trong thời gian
+        List<Discount> activeDiscounts = discountRepository.findAll().stream()
+                .filter(d -> d.isActive() && d.isWithinDateRange())
+                .toList();
+
+        if (activeDiscounts.isEmpty()) {
+            return List.of(); // không có discount nào → trả rỗng
+        }
+
+        Set<Long> discountedProductIds = new HashSet<>();
+
+        // Bước 2: Từ discount → lấy productId và variantId → suy ra product
+        for (Discount discount : activeDiscounts) {
+            // 2.1. Discount áp dụng cho PRODUCT
+            List<ProductDiscount> productDiscounts = productDiscountRepository.findByDiscountDiscountId(discount.getDiscountId());
+            discountedProductIds.addAll(productDiscounts.stream()
+                    .map(pd -> pd.getProduct().getProductId())
+                    .toList());
+
+            // 2.2. Discount áp dụng cho VARIANT → lấy product từ variant
+            List<VariantDiscount> variantDiscounts = variantDiscountRepository.findByDiscountDiscountId(discount.getDiscountId());
+            for (VariantDiscount vd : variantDiscounts) {
+                ProductVariant variant = vd.getVariant();
+                if (variant != null && variant.getProduct() != null) {
+                    discountedProductIds.add(variant.getProduct().getProductId());
+                }
+            }
+        }
+
+        if (discountedProductIds.isEmpty()) {
+            return List.of();
+        }
+
+        // Bước 3: Lấy tất cả product có ID trong danh sách
+        List<Product> products = productRepository.findAllByProductIdIn(discountedProductIds);
+
+        // Bước 4: Tính finalPrice và lọc những cái THẬT SỰ có giảm giá
+        return products.stream()
+                .filter(product -> {
+                    // Tính finalPrice cho sản phẩm (có thể có discount ở product hoặc variant)
+                    BigDecimal originalPrice = product.getPrice();
+                    BigDecimal finalPrice = calculateFinalPrice(product, null); // null = không chỉ định variant
+
+                    return finalPrice.compareTo(originalPrice) < 0; // finalPrice < price gốc → có giảm
+                })
+                .map(this::mapToDTO)
+                .toList();
+    }
+
+
+    @Override
+    public Page<ProductDTO> getRandomProductsInTree(Long rootId, Pageable pageable) {
+        List<Long> categoryIds = categoryService.getAllChildIds(rootId); // ← bạn đã có
+        Page<Product> page = productRepository.findRandomInCategoryIds(categoryIds, pageable);
+        return page.map(this::mapToDTO);
+    }
+
+    @Override
+    public ProductVariantDTO getVariantById(Long id) {
+        ProductVariant variant = variantRepository.findByIdWithProduct(id)
+                .orElseThrow(() -> new RuntimeException("Biến thể không tồn tại id: " + id));
+        return mapToVariantDTO(variant);
+    }
+
+    @Override
+    public ProductVariantDTO increaseVariantStock(Long variantId, int quantity) {
+        ProductVariant variant = variantRepository.findById(variantId)
+                .orElseThrow(() -> new RuntimeException("Biến thể không tồn tại"));
+        variant.setStockQuantity(variant.getStockQuantity() + quantity);
+        variantRepository.save(variant);
+        return mapToVariantDTO(variant);
+    }
+
     @Override
     public ProductResponse getAllProducts(int pageNumber, int pageSize, String sortBy, String sortOrder,
                                           String keyword, Long categoryId) {
@@ -140,13 +244,39 @@ public class ProductServiceImpl implements ProductService {
         return mapToDTO(product);
     }
     @Override
-    public ProductResponse getProductsByCategory(Long categoryId, int pageNumber, int pageSize, String sortBy, String sortOrder) {
-        Sort sort = sortOrder.equalsIgnoreCase("desc") ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
-        Pageable pageable = PageRequest.of(pageNumber, pageSize, sort);
-        Page<Product> page = productRepository.findByCategoryCategoryId(categoryId, pageable);
-        List<ProductDTO> dtos = page.getContent().stream().map(this::mapToDTO).collect(Collectors.toList());
-        return new ProductResponse(dtos, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages(), page.isLast());
+    public ProductResponse getProductsByCategory(
+            Long categoryId,
+            int page,
+            int size,
+            String sortBy,
+            String sortOrder
+    ) {
+        Sort sort = sortOrder.equalsIgnoreCase("desc")
+                ? Sort.by(sortBy).descending()
+                : Sort.by(sortBy).ascending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<Product> productPage =
+                productRepository.findByCategoryCategoryId(categoryId, pageable);
+
+        List<ProductDTO> dtos = productPage
+                .getContent()
+                .stream()
+                .map(this::mapToDTO)
+                .toList();
+
+        return new ProductResponse(
+                dtos,
+                productPage.getNumber(),
+                productPage.getSize(),
+                productPage.getTotalElements(),
+                productPage.getTotalPages(),
+                productPage.isLast()
+        );
     }
+
+
     @Override
     public ProductResponse getProductsByKeyword(String keyword, int pageNumber, int pageSize, String sortBy, String sortOrder) {
         Sort sort = sortOrder.equalsIgnoreCase("desc") ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
@@ -165,29 +295,71 @@ public class ProductServiceImpl implements ProductService {
         );
     }
     @Override
-    public ProductDTO updateProduct(Long productId, ProductUpdateDTO updateDTO) {
+    public ProductDTO updateProductWithVariants(
+            Long productId,
+            ProductUpdateDTO updateDTO,
+            MultipartFile mainImage,
+            List<MultipartFile> variantImages
+    ) throws IOException {
+
+        // Lấy product hiện tại
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sản phẩm"));
-        // Cập nhật product
-        if (updateDTO.getProductName() != null) product.setProductName(updateDTO.getProductName());
-        if (updateDTO.getShortDescription() != null) product.setShortDescription(updateDTO.getShortDescription());
-        if (updateDTO.getLongDescription() != null) product.setLongDescription(updateDTO.getLongDescription());
-        if (updateDTO.getPrice() != null) product.setPrice(updateDTO.getPrice());
-        // Cập nhật variants
-        if (updateDTO.getVariants() != null) {
-            for (VariantUpdateDTO vDto : updateDTO.getVariants()) {
-                ProductVariant variant = variantRepository.findById(vDto.getVariantId())
-                        .orElseThrow(() -> new RuntimeException("Phiên bản sản phẩm không tồn tại"));
 
-                if (vDto.getColor() != null) variant.setColor(vDto.getColor());
-                if (vDto.getStockQuantity() != null) variant.setStockQuantity(vDto.getStockQuantity());
-                if (vDto.getPriceOverride() != null) variant.setPriceOverride(vDto.getPriceOverride());
+        // === CẬP NHẬT THÔNG TIN CƠ BẢN ===
+        if (updateDTO.getProductName() != null && !updateDTO.getProductName().isBlank())
+            product.setProductName(updateDTO.getProductName());
+        if (updateDTO.getShortDescription() != null)
+            product.setShortDescription(updateDTO.getShortDescription());
+        if (updateDTO.getLongDescription() != null)
+            product.setLongDescription(updateDTO.getLongDescription());
+        if (updateDTO.getPrice() != null) {
+            product.setPrice(updateDTO.getPrice());
+            product.setFinalPrice(updateDTO.getPrice());
+        }
+
+        // === UPLOAD ẢNH CHÍNH NẾU CÓ ===
+        if (mainImage != null && !mainImage.isEmpty()) {
+            String newImagePath = fileService.uploadImage("products", mainImage);
+            product.setImagePath(newImagePath);
+        }
+
+        // === CẬP NHẬT BIẾN THỂ ===
+        if (updateDTO.getVariants() != null && !updateDTO.getVariants().isEmpty()) {
+            int imageIndex = 0;
+
+            for (VariantUpdateDTO vDto : updateDTO.getVariants()) {
+                if (vDto.getVariantId() == null) continue;
+
+                ProductVariant variant = variantRepository.findById(vDto.getVariantId())
+                        .orElseThrow(() -> new RuntimeException("Variant không tồn tại: " + vDto.getVariantId()));
+
+                if (vDto.getColor() != null && !vDto.getColor().isBlank())
+                    variant.setColor(vDto.getColor());
+                if (vDto.getStockQuantity() != null)
+                    variant.setStockQuantity(vDto.getStockQuantity());
+                if (vDto.getPriceOverride() != null) {
+                    variant.setPriceOverride(vDto.getPriceOverride());
+                } else {
+                    variant.setPriceOverride(null);
+                }
+
+                // UPLOAD ẢNH CHO VARIANT NẾU CÓ
+                if (variantImages != null && imageIndex < variantImages.size()) {
+                    MultipartFile imgFile = variantImages.get(imageIndex++);
+                    if (imgFile != null && !imgFile.isEmpty()) {
+                        String newPath = fileService.uploadImage("variants", imgFile);
+                        variant.setImagePath(newPath);
+                    }
+                }
             }
         }
-        product.setFinalPrice(calculateFinalPrice(product, null));
+
+        // Lưu lại
         productRepository.save(product);
         return mapToDTO(product);
     }
+
     @Override
     public void deleteProduct(Long productId) {
         if (!productRepository.existsById(productId)) {
@@ -213,8 +385,6 @@ public class ProductServiceImpl implements ProductService {
     }
     @Override
     public ProductVariantDTO updateVariantImage(Long variantId, MultipartFile image) throws IOException {
-        ProductVariant variant = variantRepository.findById(variantId)
-                .orElseThrow(() -> new RuntimeException("Phiên bản sản phẩm không tồn tại"));
         ProductVariant v = variantRepository.findById(variantId)
                 .orElseThrow(() -> new RuntimeException("Không tìm được biến thể"));
 
@@ -236,9 +406,9 @@ public class ProductServiceImpl implements ProductService {
         variant.setStockQuantity(variant.getStockQuantity() - quantity);
         variantRepository.save(variant);
         // Cập nhật finalPrice của product
-        Product product = variant.getProduct();
-        product.setFinalPrice(calculateFinalPrice(product, null));
-        productRepository.save(product);
+//        Product product = variant.getProduct();
+//        product.setFinalPrice(calculateFinalPrice(product, null));
+//        productRepository.save(product);
         return mapToVariantDTO(variant);
     }
     // Helper: Tính final price
@@ -266,13 +436,13 @@ public class ProductServiceImpl implements ProductService {
         }
         return basePrice.subtract(discountAmount);
     }
-    @Override
-    public void updateProductFinalPrice(Long productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException("Sản phẩm", "id", productId));
-        product.setFinalPrice(calculateFinalPrice(product, null));
-        productRepository.save(product);
-    }
+//    @Override
+//    public void updateProductFinalPrice(Long productId) {
+//        Product product = productRepository.findById(productId)
+//                .orElseThrow(() -> new ResourceNotFoundException("Sản phẩm", "id", productId));
+//        product.setFinalPrice(calculateFinalPrice(product, null));
+//        productRepository.save(product);
+//    }
 
     private BigDecimal calculateDiscount(Discount d, BigDecimal price) {
         if (d.getType() == DiscountType.PERCENTAGE) {
@@ -285,7 +455,7 @@ public class ProductServiceImpl implements ProductService {
             return d.getMaxAmount() != null ? d.getMaxAmount().min(price) : BigDecimal.ZERO;
         }
     }
-    // Helper: Map
+
     private ProductDTO mapToDTO(Product product) {
         ProductDTO dto = new ProductDTO();
         dto.setProductId(product.getProductId());
@@ -293,17 +463,45 @@ public class ProductServiceImpl implements ProductService {
         dto.setPrice(product.getPrice());
         dto.setShortDescription(product.getShortDescription());
         dto.setLongDescription(product.getLongDescription());
+
+        // TÍNH 1 LẦN
         dto.setFinalPrice(calculateFinalPrice(product, null));
         dto.setImageUrl(fileService.getFullImageUrl(product.getImagePath()));
-        // CHUYÊN NGHIỆP: DÙNG ENTITY → KHÔNG CẦN QUERY LẠI
+
+        // Áp dụng discount
         List<AppliedDiscountDTO> applied = productDiscountRepository
                 .findByProduct_ProductId(product.getProductId())
                 .stream()
-                .map(pd -> mapToAppliedDiscountDTO(pd.getDiscount())) // ← DỰNG SẴN
-                .collect(Collectors.toList());
-
+                .map(pd -> mapToAppliedDiscountDTO(pd.getDiscount()))
+                .toList();
         dto.setAppliedDiscounts(applied);
-        dto.setVariants(product.getVariants().stream().map(this::mapToVariantDTO).toList());
+
+        // Variant
+        dto.setVariants(product.getVariants().stream()
+                .map(v -> {
+                    ProductVariantDTO vDto = new ProductVariantDTO();
+                    vDto.setVariantId(v.getVariantId());
+                    vDto.setProductId(v.getProduct().getProductId());
+                    vDto.setProductName(v.getProduct().getProductName());
+                    vDto.setColor(v.getColor());
+                    vDto.setStockQuantity(v.getStockQuantity());
+                    vDto.setImageUrl(fileService.getFullImageUrl(v.getImagePath()));
+                    vDto.setPriceOverride(v.getPriceOverride());
+
+                    // TÍNH FINAL PRICE CHO VARIANT
+                    vDto.setFinalPrice(calculateFinalPrice(v.getProduct(), v));
+
+                    // Discount của variant
+                    List<AppliedDiscountDTO> vApplied = variantDiscountRepository
+                            .findByVariantVariantId(v.getVariantId())
+                            .stream()
+                            .map(vd -> mapToAppliedDiscountDTO(vd.getDiscount()))
+                            .toList();
+                    vDto.setAppliedDiscounts(vApplied);
+                    return vDto;
+                })
+                .toList());
+
         return dto;
     }
 
@@ -320,7 +518,16 @@ public class ProductServiceImpl implements ProductService {
         dto.setProductName(v.getProduct().getProductName());
         dto.setFinalPrice(calculateFinalPrice(v.getProduct(), v));
 
-        // NHƯ PRODUCT: DÙNG ENTITY ĐÃ LOAD → KHÔNG QUERY LẠI
+//        Discount Product
+        List<AppliedDiscountDTO> productDiscounts = productDiscountRepository
+                .findByProduct_ProductId(v.getProduct().getProductId())
+                .stream()
+                .map(pd -> mapToAppliedDiscountDTO(pd.getDiscount()))
+                .toList();
+
+        dto.setAppliedProductDiscounts(productDiscounts);
+
+// Discount Variant
         List<AppliedDiscountDTO> applied = variantDiscountRepository
                 .findByVariantVariantId(v.getVariantId())  // Lấy List<VariantDiscount>
                 .stream()

@@ -25,4 +25,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
 
     @Query("SELECT v FROM ProductVariant v JOIN FETCH v.product WHERE v.variantId = :id")
     Optional<ProductVariant> findByIdWithProduct(@Param("id") Long id);
+
+    List<ProductVariant> findByImagePathContaining(String partialPath);
 }

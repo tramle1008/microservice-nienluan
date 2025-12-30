@@ -10,5 +10,5 @@ public class AddToCartRequest {
     private Long variantId;
 
     @Min(1)
-    private int quantity = 1;
+    private int quantity ;
 }

@@ -12,13 +12,13 @@ import java.util.List;
 @AllArgsConstructor
 public class ProductVariantDTO {
     private Long variantId;
-    private Long productId;           // THÊM
+    private Long productId;
     private String productName;
     private String color;
     private Integer stockQuantity;
-//    private String imageUrl;
     private String imageUrl;
     private BigDecimal priceOverride;
     private BigDecimal finalPrice;
+    private List<AppliedDiscountDTO> appliedProductDiscounts;
     private List<AppliedDiscountDTO> appliedDiscounts;
 }

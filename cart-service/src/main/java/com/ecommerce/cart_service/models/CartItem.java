@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class CartItem {
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne
@@ -28,6 +28,6 @@ public class CartItem {
     private int quantity;
     private BigDecimal unitPrice;
     private BigDecimal subtotal;
+    private Long discountId;
 
-    private LocalDateTime reservedUntil;
 }

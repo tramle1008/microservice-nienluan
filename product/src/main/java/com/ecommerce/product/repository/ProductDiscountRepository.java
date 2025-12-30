@@ -17,4 +17,5 @@ public interface ProductDiscountRepository extends JpaRepository<ProductDiscount
     // 2. KIỂM TRA ĐÃ APPLY CHƯA (dùng trong applyDiscountToProduct)
     boolean existsByProductAndDiscount(Product product, Discount discount);
 
+    List<ProductDiscount> findByDiscountDiscountId(Long discountId);
 }

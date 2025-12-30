@@ -65,8 +65,12 @@ public interface ProductService {
     // ===================================================================
     // 6. CẬP NHẬT SẢN PHẨM (TOÀN BỘ THÔNG TIN + VARIANT)
     // ===================================================================
-    ProductDTO updateProduct(Long productId, ProductUpdateDTO updateDTO);
-
+    ProductDTO updateProductWithVariants(
+            Long productId,
+            ProductUpdateDTO updateDTO,
+            MultipartFile mainImage,
+            List<MultipartFile> variantImages
+    ) throws IOException;
     // ===================================================================
     // 7. XÓA SẢN PHẨM (CASCADE XÓA VARIANT)
     // ===================================================================
@@ -89,7 +93,7 @@ public interface ProductService {
 
     BigDecimal calculateFinalPrice(Product product, ProductVariant variant);
 
-    void updateProductFinalPrice(Long productId);
+//    void updateProductFinalPrice(Long productId);
 
     List<ProductDTO> getDiscountedProducts();
 
@@ -97,4 +101,11 @@ public interface ProductService {
     Page<ProductDTO> getRandomProductsInTree(Long rootId, Pageable pageable);
 
     ProductVariantDTO getVariantById(Long id);
+
+    ProductVariantDTO increaseVariantStock(Long variantId, int quantity);
+
+    // Trong ProductService interface
+    List<ProductDTO> searchProductsBySimilarImage(MultipartFile image) throws IOException;
+
+    Page<ProductDTO> getProductsInTree(Long rootId, Pageable pageable);
 }

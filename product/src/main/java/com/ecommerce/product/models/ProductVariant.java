@@ -27,7 +27,7 @@ public class ProductVariant {
     @Min(0)
     private Integer stockQuantity = 0;
 
-    @Column(name = "image_path")  // ← ĐỔI TÊN
+    @Column(name = "image_path")  //
     private String imagePath;     // ← lưu: variants/xyz.jpg
 
     private BigDecimal priceOverride;

@@ -1,62 +1,69 @@
 package com.ecommerce.auth.controller;
 
-
-
-import com.ecommerce.auth.dto.AddressDTO;
-import com.ecommerce.auth.models.User;
+import com.ecommerce.auth.dto.*;
+import com.ecommerce.auth.models.*;
 import com.ecommerce.auth.service.AddressService;
-import com.ecommerce.auth.util.AuthUtil;
-import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/address")
+@RequiredArgsConstructor
 public class AddressController {
 
-    @Autowired
-    AddressService addressService;
+    private final AddressService addressService;
 
-    @Autowired
-    AuthUtil authUtil;
-    @PostMapping("/auth/user/addresses")
-    public ResponseEntity<AddressDTO> createAddress(@Valid @RequestBody AddressDTO addressDTO){
-        User user = authUtil.getCurrentUserEntity();
-        AddressDTO saveAddress = addressService.createAddress(addressDTO, user);
-        return new ResponseEntity<>(saveAddress, HttpStatus.CREATED);
+//##### ADMIN############
+    // Lấy tất cả địa chỉ của user
+    @GetMapping("/user")
+    public List<AddressDTO> getUserAddresses(@RequestHeader("X-User-Id") Long userId) {
+        return addressService.getUserAddresses(userId);
     }
 
-
-    @GetMapping("/admin/user/addresses")
-    public ResponseEntity<List<AddressDTO>> getAllAddresses(){
-       List<AddressDTO> addressDTOList = addressService.getAdresses();
-          return new ResponseEntity<>(addressDTOList, HttpStatus.OK);
+    // Thêm địa chỉ
+    @PostMapping("/user")
+    public AddressDTO addAddress(  @RequestHeader("X-User-Id") Long userId,
+                                 @RequestBody AddressRequestDTO request) {
+        return addressService.addAddress(
+                userId,
+                request.getProvinceId(),
+                request.getWardId(),
+                request.getDetail(),
+                request.getPhoneNumber()
+        );
+    }
+    // Xóa địa chỉ
+    @DeleteMapping("/{addressId}")
+    public void deleteAddress(@PathVariable Long addressId) {
+        addressService.deleteAddress(addressId);
     }
 
-//    get address user until
-    @GetMapping("/auth/user/addresses")
-    public ResponseEntity<List<AddressDTO>> getUserAddresses(){
-        User user = authUtil.getCurrentUserEntity();
-        List<AddressDTO> addressDTOList = addressService.getUserAddresses(user);
-        return new ResponseEntity<>(addressDTOList, HttpStatus.OK);
+//    thay doi dia chỉ
+@PutMapping("/{addressId}")
+public AddressDTO updateAddress(@PathVariable Long addressId,
+                                @RequestBody AddressRequestDTO request) {
+    return addressService.updateAddress(
+            addressId,
+            request.getProvinceId(),
+            request.getWardId(),
+            request.getDetail(),
+            request.getPhoneNumber()
+    );
+}
+
+
+//########## PUBLIC ###########
+    // API lấy dữ liệu tỉnh/huyện/xã
+    // API lấy tỉnh + xã
+    @GetMapping("/provinces")
+    public List<ProvinceDTO> getProvinces() {
+        return addressService.getProvinces();
     }
 
-    @PutMapping("/auth/user/addresses/update/{addressId}")
-    public ResponseEntity<AddressDTO> updateAddress(@Valid @RequestBody AddressDTO addressDTO,
-                                                      @PathVariable("addressId") Long addressId) {
-        AddressDTO updatedUserAddressDTO = addressService.updateUserAddress(addressDTO, addressId);
-        return new ResponseEntity<>(updatedUserAddressDTO, HttpStatus.OK);
+    @GetMapping("/wards")
+    public List<WardDTO> getWards(@RequestParam Long provinceId) {
+        return addressService.getWardsByProvince(provinceId);
     }
-
-    @DeleteMapping("/auth/user/address/delete/{addressId}")
-    public ResponseEntity<String> deleteAddress(@PathVariable("addressId") Long addressId){
-        addressService.deleteUserAddress(addressId);
-        return new ResponseEntity<>("successfully ", HttpStatus.OK);
-    }
-
-
 }

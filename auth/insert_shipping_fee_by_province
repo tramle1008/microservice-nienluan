@@ -1,0 +1,41 @@
+-- src/main/resources/data-shipping-fee.sql
+-- Phí ship nhỏ nhẹ để test (500 - 2000k), sau bạn tự tăng lên 25k-45k khi đi thật
+
+INSERT INTO shipping_fee_by_province (province_id, inner_city_fee, default_fee, free_shipping_threshold) VALUES
+(1,  800,  1500, 1000),   -- Hà Nội (01) → nội thành rẻ hơn
+(79, 000,  500, 2000),   -- TP.HCM (79)
+(31, 1000, 1800, 1000),   -- Hải Phòng
+(48, 1000, 1800, 1000),   -- Đà Nẵng
+(92, 500, 800, 1000),   -- Cần Thơ
+(4,  1200, 2000, 500),   -- Cao Bằng
+(8,  1200, 2000, 500),   -- Tuyên Quang
+(11, 1200, 2000, 500),   -- Điện Biên
+(12, 1200, 2000, 500),   -- Lai Châu
+(14, 1200, 2000, 500),   -- Sơn La
+(15, 1200, 2000, 500),   -- Lào Cai
+(19, 1200, 2000, 500),   -- Thái Nguyên
+(20, 1200, 2000, 500),   -- Lạng Sơn
+(22, 1200, 2000, 500),   -- Quảng Ninh
+(24, 1200, 2000, 500),   -- Bắc Ninh
+(25, 1200, 2000, 500),   -- Phú Thọ
+(33, 1200, 2000, 500),   -- Hưng Yên
+(37, 1200, 2000, 500),   -- Ninh Bình
+(38, 1200, 2000, 500),   -- Thanh Hóa
+(40, 1200, 2000, 500),   -- Nghệ An
+(42, 1200, 2000, 500),   -- Hà Tĩnh
+(44, 1200, 2000, 500),   -- Quảng Trị
+(46, 1200, 2000, 500),   -- Huế
+(51, 1200, 2000, 500),   -- Quảng Ngãi
+(52, 1200, 2000, 500),   -- Gia Lai
+(56, 1200, 2000, 500),   -- Khánh Hòa
+(66, 1200, 2000, 500),   -- Đắk Lắk
+(68, 1200, 2000, 500),   -- Lâm Đồng
+(75, 1200, 2000, 500),   -- Đồng Nai
+(80, 1200, 2000, 500),   -- Tây Ninh
+(82, 1200, 2000, 500),   -- Đồng Tháp
+(86, 1200, 2000, 500),   -- Vĩnh Long
+(91, 1200, 2000, 500),   -- An Giang
+(96, 1200, 2000, 500);   -- Cà Mau
+
+-- Nếu lần sau chạy lại muốn xóa cũ trước thì thêm 1 dòng này ở đầu file:
+-- DELETE FROM shipping_fee_by_province WHERE province_id IN (1,4,8,11,12,14,15,19,20,22,24,25,31,33,37,38,40,42,44,46,48,51,52,56,66,68,75,79,80,82,86,91,92,96);

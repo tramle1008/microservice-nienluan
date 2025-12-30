@@ -8,46 +8,40 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
+
 @Entity
-@NoArgsConstructor
-@AllArgsConstructor
-@Data
 @Table(name = "address")
-@ToString
+@Data @NoArgsConstructor @AllArgsConstructor
 public class Address {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "address_id")
     private Long addressId;
 
-    @NotBlank
-    private String province; //tỉnh thành phố
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
-    @NotBlank
-    private String district; //quận huyện
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "province_id", nullable = false)
+    private Province province;
 
-    @NotBlank
-    private String ward; //phường , xã, thị trấn
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ward_id", nullable = false)
+    private Ward ward;
+
+    // Denormalized
+    @Column(name = "province_name")
+    private String provinceName;
+
+    @Column(name = "ward_name")
+    private String wardName;
 
     @Column(name = "detail")
-// Gợi ý: "Nhập số nhà, tên đường nếu có"
     private String detail;
 
     @NotBlank
-    @ToString.Exclude
-    @Size(min = 10, message = "Số điện thoại phải có ít nhất 10 chữ số")
+    @Size(min = 10, max = 15)
+    @Column(name = "phone_number")
     private String phoneNumber;
-
-
-    @ManyToOne
-    @JoinColumn(name = "user_id")
-    private User user;
-
-    public Address(String province, String district, String ward, String detail, String phoneNumber) {
-        this.province = province;
-        this.district = district;
-        this.ward = ward;
-        this.detail = detail;
-        this.phoneNumber = phoneNumber;
-    }
 }

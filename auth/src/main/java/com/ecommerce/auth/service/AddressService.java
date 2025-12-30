@@ -2,19 +2,23 @@ package com.ecommerce.auth.service;
 
 
 import com.ecommerce.auth.dto.AddressDTO;
-import com.ecommerce.auth.models.User;
-import jakarta.validation.Valid;
+import com.ecommerce.auth.dto.ProvinceDTO;
+import com.ecommerce.auth.dto.WardDTO;
 
 import java.util.List;
 
 public interface AddressService {
-    AddressDTO createAddress(AddressDTO addressDTO, User user);
+    AddressDTO addAddress(Long userId, Long provinceId, Long wardId,
+                          String detail, String phone);
 
-    List<AddressDTO> getAdresses();
+    AddressDTO updateAddress(Long addressId, Long provinceId, Long wardId,
+                             String detail, String phone);
 
-    List<AddressDTO> getUserAddresses(User user);
+    void deleteAddress(Long addressId);
 
-    AddressDTO updateUserAddress(@Valid AddressDTO addressDTO, Long addressId);
+    List<AddressDTO> getUserAddresses(Long userId);
 
-    AddressDTO deleteUserAddress(Long addressId);
+    List<ProvinceDTO> getProvinces();
+
+    List<WardDTO> getWardsByProvince(Long provinceId);  // mới
 }
